@@ -61,8 +61,7 @@ async def update_task(task_id: int, title: str = None, description: str = None, 
         task.due_date = due_date
     if priority:
         task.priority = priority
-    if status:
-        task.status = status
+   
 
     db.commit()
     db.refresh(task)
