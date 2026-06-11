@@ -4,8 +4,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import cast, Integer
 from models.users import Users
 from models.tasks import Tasks
+from jwt_dependency import create_jwt_token, decode_jwt_token
+from users import get_current_user
+from fastapi.security import HTTPBearer
 
 app = FastAPI()
+
+security = HTTPBearer()
 
 
 @app.get("/api/v1/database-check")
@@ -30,14 +35,20 @@ async def signup(username: str, email: str, password: str, first_name: str, last
 @app.post("/api/v1/users/login")
 async def login(username: str, password: str, db: Session = Depends(get_db)):
     user = db.query(Users).filter(Users.username == username).first()
+    print("userd", user.id)
     if not user or user.password_hash != password:
         return {"error": "Invalid username or password"}
+    print(user.id)
+    token = await create_jwt_token(
+        {"user_id": user.id}
+    )
+    print("token", token)
 
-    return {"message": "Login successful"}
+    return {"message": "Login successful", "token": token}
 
 
 @app.post("/api/v1/tasks/create")
-async def create_task(title: str, description: str, due_date: str, priority: str, user_id: int, db: Session = Depends(get_db)):
+async def create_task(title: str, description: str, due_date: str, priority: str, user_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     
     task = Tasks(title=title, description=description, due_date=due_date, priority=priority, user_id=user_id)
     db.add(task)
@@ -94,6 +105,7 @@ async def mark_task_complete(task_id: int, db: Session = Depends(get_db)):
     return {"message": "Task marked as complete", "task": task}
 
 @app.get("/api/v1/tasks/list")
-async def list_tasks(db: Session = Depends(get_db)):
-    tasks = db.query(Tasks).order_by(cast(Tasks.priority, Integer).desc()).all()
-    return tasks
+async def list_tasks(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    # print("user", user.id)
+    tasks = db.query(Tasks).filter(Tasks.user_id == user.id).order_by(cast(Tasks.priority, Integer).desc()).all()
+    return {"user": user, "tasks": tasks}
