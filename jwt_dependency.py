@@ -1,4 +1,4 @@
-import jwt
+from jose import jwt
 from env import SECRET_KEY
 from datetime import datetime, timedelta
 
