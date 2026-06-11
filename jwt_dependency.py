@@ -1,6 +1,13 @@
+import os
 from jose import jwt
-from env import SECRET_KEY
+from dotenv import load_dotenv
 from datetime import datetime, timedelta
+
+load_dotenv()
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY environment variable is not set")
 
 async def create_jwt_token(user_id: int):
     payload = {
