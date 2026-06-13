@@ -1,10 +1,10 @@
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from database import get_db
 from sqlalchemy.orm import Session
 from sqlalchemy import cast, Integer
 from models.users import Users
 from models.tasks import Tasks
-from jwt_dependency import create_jwt_token, decode_jwt_token
+from jwt_dependency import create_jwt_token, decode_jwt_token, create_refresh_token
 from users import get_current_user
 from fastapi.security import HTTPBearer
 
@@ -21,6 +21,25 @@ async def root(db=Depends(get_db)):
 async def root():
     return {"message": "Hello World"}
 
+@app.get("/api/v1/refresh-access-token")
+async def refresh_access_token(headers=Depends(security)):
+    try:
+        payload = await decode_jwt_token(headers.credentials)
+
+        if payload.get("type") != "refresh":
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token type"
+            )
+        user_id = payload.get("user_id") if isinstance(payload, dict) else None
+        user_id = user_id['user_id'] if isinstance(user_id, dict) else None
+        
+        token = await create_jwt_token({"user_id": user_id})
+        return {"access_token": token}
+    
+    except Exception as e:
+        return {"error": str(e)}
+    
 @app.post("/api/v1/users/signup")
 async def signup(username: str, email: str, password: str, first_name: str, last_name: str=None,
                 db: Session = Depends(get_db)):
@@ -39,18 +58,21 @@ async def login(username: str, password: str, db: Session = Depends(get_db)):
     if not user or user.password_hash != password:
         return {"error": "Invalid username or password"}
     print(user.id)
-    token = await create_jwt_token(
+    access_token = await create_jwt_token(
         {"user_id": user.id}
     )
-    print("token", token)
+    print("token", access_token)
+    refresh_access_token = await create_refresh_token(
+        {"user_id": user.id}
+    )
 
-    return {"message": "Login successful", "token": token}
+    return {"message": "Login successful", "token": access_token, "refresh_token": refresh_access_token}
 
 
 @app.post("/api/v1/tasks/create")
-async def create_task(title: str, description: str, due_date: str, priority: str, user_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+async def create_task(title: str, description: str, due_date: str, priority: str, db: Session = Depends(get_db), user=Depends(get_current_user)):
     
-    task = Tasks(title=title, description=description, due_date=due_date, priority=priority, user_id=user_id)
+    task = Tasks(title=title, description=description, due_date=due_date, priority=priority, user_id=user.id)
     db.add(task)
     db.commit()
     db.refresh(task)
@@ -58,9 +80,9 @@ async def create_task(title: str, description: str, due_date: str, priority: str
     return task
 
 @app.post("/api/v1/tasks/update")
-async def update_task(task_id: int, title: str = None, description: str = None, due_date: str = None, priority: str = None, status: str = None, db: Session = Depends(get_db)):
+async def update_task(task_id: int, title: str = None, description: str = None, due_date: str = None, priority: str = None, status: str = None, db: Session = Depends(get_db), user=Depends(get_current_user)):
    
-    task = db.query(Tasks).filter(Tasks.id == task_id).first()
+    task = db.query(Tasks).filter(Tasks.id == task_id and Tasks.user_id == user.id).first()
     if not task:
         return {"error": "Task not found"}
 
@@ -80,9 +102,9 @@ async def update_task(task_id: int, title: str = None, description: str = None, 
     return task
 
 @app.post("/api/v1/tasks/delete")
-async def delete_task(task_id: int, db: Session = Depends(get_db)):
+async def delete_task(task_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     from models.tasks import Tasks
-    task = db.query(Tasks).filter(Tasks.id == task_id).first()
+    task = db.query(Tasks).filter(Tasks.id == task_id and Tasks.user_id == user.id).first()
     if not task:
         return {"error": "Task not found"}
 
@@ -92,9 +114,9 @@ async def delete_task(task_id: int, db: Session = Depends(get_db)):
     return {"message": "Task deleted successfully"}
 
 @app.post("/api/v1/tasks/mark-complete")
-async def mark_task_complete(task_id: int, db: Session = Depends(get_db)):
+async def mark_task_complete(task_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     from models.tasks import Tasks
-    task = db.query(Tasks).filter(Tasks.id == task_id).first()
+    task = db.query(Tasks).filter(Tasks.id == task_id and Tasks.user_id == user.id).first()
     if not task:
         return {"error": "Task not found"}
 
