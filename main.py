@@ -1,11 +1,12 @@
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, Request, FastAPI, HTTPException
 from database import get_db
 from sqlalchemy.orm import Session
 from sqlalchemy import cast, Integer
 from models.users import Users
 from models.tasks import Tasks
 from jwt_dependency import create_jwt_token, decode_jwt_token, create_refresh_token
-from users import get_current_user
+from services.users import get_current_user
+from services.tasks import get_user_tasks, get_expired_tasks
 from fastapi.security import HTTPBearer
 
 app = FastAPI()
@@ -127,7 +128,12 @@ async def mark_task_complete(task_id: int, db: Session = Depends(get_db), user=D
     return {"message": "Task marked as complete", "task": task}
 
 @app.get("/api/v1/tasks/list")
-async def list_tasks(db: Session = Depends(get_db), user=Depends(get_current_user)):
-    # print("user", user.id)
-    tasks = db.query(Tasks).filter(Tasks.user_id == user.id).order_by(cast(Tasks.priority, Integer).desc()).all()
+async def list_tasks(request:Request,  db: Session = Depends(get_db), user=Depends(get_current_user)):
+    params = dict(request.query_params)
+    tasks = await get_user_tasks(db, params, user.id)
     return {"user": user, "tasks": tasks}
+
+@app.get("/api/v1/tasks/expired")
+async def expired_tasks(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    expired_tasks = await get_expired_tasks(db, user.id)
+    return {"user": user, "expired_tasks": expired_tasks}
