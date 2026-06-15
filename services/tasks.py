@@ -2,7 +2,7 @@ from models.tasks import Tasks
 from sqlalchemy import cast, Integer
 from datetime import datetime
 
-async def get_user_tasks(db, filters, user_id):
+async def get_user_tasks(db, filters, user_id): 
     query = db.query(Tasks).filter(Tasks.user_id == user_id)
 
     if filters.get("status"):
@@ -14,6 +14,7 @@ async def get_user_tasks(db, filters, user_id):
 
     return query
 
-async def get_expired_tasks(db, user_id):
-    expired_tasks = db.query(Tasks).filter(Tasks.user_id == user_id, Tasks.due_date < datetime.utcnow()).all()
+async def get_expired_tasks(db, user_id): 
+    expired_tasks = db.query(Tasks).filter(Tasks.user_id == user_id, Tasks.due_date < datetime.utcnow(),
+                                            Tasks.status != "completed").order_by(cast(Tasks.priority, Integer).desc())
     return expired_tasks
