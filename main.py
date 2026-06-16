@@ -127,7 +127,18 @@ async def mark_task_complete(task_id: int, db: Session = Depends(get_db), user=D
 
     return {"message": "Task marked as complete", "task": task}
 
-@app.get("/api/v1/tasks/list")
+
+TODO: Remove this endpoint in production, this is just for testing purposes # type: ignore
+
+@app.get("/api/v1/test/refresh-access-token")
+async def refresh_access_token(user_id: int):
+    try:
+        token = await create_jwt_token({"user_id": user_id})
+        return {"access_token": token}
+    
+    except Exception as e:
+        return {"error": str(e)}
+      
 async def list_tasks(request:Request,  db: Session = Depends(get_db), user=Depends(get_current_user)):
     params = dict(request.query_params)
     tasks = await get_user_tasks(db, params, user.id)
