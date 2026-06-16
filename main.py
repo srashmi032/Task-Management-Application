@@ -128,7 +128,7 @@ async def mark_task_complete(task_id: int, db: Session = Depends(get_db), user=D
     return {"message": "Task marked as complete", "task": task}
 
 
-TODO: Remove this endpoint in production, this is just for testing purposes # type: ignore
+# TODO: Remove this endpoint in production, this is just for testing purposes
 
 @app.get("/api/v1/test/refresh-access-token")
 async def refresh_access_token(user_id: int):
