@@ -131,3 +131,15 @@ async def list_tasks(db: Session = Depends(get_db), user=Depends(get_current_use
     # print("user", user.id)
     tasks = db.query(Tasks).filter(Tasks.user_id == user.id).order_by(cast(Tasks.priority, Integer).desc()).all()
     return {"user": user, "tasks": tasks}
+
+
+TODO: Remove this endpoint in production, this is just for testing purposes # type: ignore
+
+@app.get("/api/v1/test/refresh-access-token")
+async def refresh_access_token(user_id: int):
+    try:
+        token = await create_jwt_token({"user_id": user_id})
+        return {"access_token": token}
+    
+    except Exception as e:
+        return {"error": str(e)}
