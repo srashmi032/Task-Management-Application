@@ -6,7 +6,7 @@ from models.users import Users
 from models.tasks import Tasks
 from jwt_dependency import create_jwt_token, decode_jwt_token, create_refresh_token
 from services.users import get_current_user
-from services.tasks import get_user_tasks, get_expired_tasks
+from services.tasks import get_user_tasks, get_expired_tasks, get_completed_tasks, get_task_by_id
 from fastapi.security import HTTPBearer
 
 app = FastAPI()
@@ -138,7 +138,8 @@ async def refresh_access_token(user_id: int):
     
     except Exception as e:
         return {"error": str(e)}
-      
+
+@app.get("/api/v1/tasks/list")     
 async def list_tasks(request:Request,  db: Session = Depends(get_db), user=Depends(get_current_user)):
     params = dict(request.query_params)
     tasks = await get_user_tasks(db, params, user.id)
@@ -148,3 +149,15 @@ async def list_tasks(request:Request,  db: Session = Depends(get_db), user=Depen
 async def expired_tasks(db: Session = Depends(get_db), user=Depends(get_current_user)):
     expired_tasks = await get_expired_tasks(db, user.id)
     return {"user": user, "expired_tasks": expired_tasks}
+
+@app.get("/api/v1/tasks/completed")
+async def completed_tasks(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    completed_tasks = await get_completed_tasks(db, user.id)
+    return {"user": user, "completed_tasks": completed_tasks}
+
+@app.get("/api/v1/tasks/{task_id}")
+async def get_task(task_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    task = await get_task_by_id(db, task_id, user.id)
+    if not task:
+        return {"error": "Task not found"}
+    return {"user": user, "task": task}
