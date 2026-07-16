@@ -4,8 +4,9 @@ from dotenv import load_dotenv
 import os
 
 load_dotenv()
-# DATABASE_URL=os.getenv("DATABASE_URL")
-DATABASE_URL="postgresql://postgres:mysecretpassword@localhost:5432/manage_tasks"
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL environment variable is not set")
 engine = create_engine(DATABASE_URL)
 
 Base = declarative_base()
