@@ -1,7 +1,8 @@
 import os
 from jose import jwt
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from fastapi import HTTPException
 
 load_dotenv()
 
@@ -12,7 +13,7 @@ if not SECRET_KEY:
 async def create_refresh_token(user_id: int):
     payload = {
         "user_id": user_id,
-        "exp": datetime.utcnow() + timedelta(days=7),
+        "exp": datetime.now(timezone.utc) + timedelta(days=7),
         "type": "refresh"
     }
     token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
@@ -21,7 +22,7 @@ async def create_refresh_token(user_id: int):
 async def create_jwt_token(user_id: int):
     payload = {
         "user_id": user_id,
-        "exp": datetime.utcnow() + timedelta(minutes=30),
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=30),
         "type": "jwt"
     }
     token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
@@ -29,11 +30,8 @@ async def create_jwt_token(user_id: int):
 
 async def decode_jwt_token(token: str):
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        return payload
+        return jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
     except jwt.ExpiredSignatureError:
-        return "Acess token has expired"
-    except jwt.InvalidTokenError:
-        return "Invalid access token"
-    
-
+        raise HTTPException(status_code=401, detail="Access token has expired")
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Invalid access token")

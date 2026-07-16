@@ -1,16 +1,14 @@
 from fastapi import Depends, Request, APIRouter, HTTPException
+from sqlalchemy.exc import IntegrityError
 from database import get_db
 from sqlalchemy.orm import Session
-from sqlalchemy import cast, Integer
 from models.users import Users
-from models.tasks import Tasks
 from jwt_dependency import create_jwt_token, decode_jwt_token, create_refresh_token
-from services.users import get_current_user
-from services.tasks import get_user_tasks, get_expired_tasks, get_completed_tasks, get_task_by_id
+from services.users import hash_password, verify_password
+from schemas.users import SignupRequest, LoginRequest, UserOut
 from fastapi.security import HTTPBearer
 from rate_limiter import limiter
 
-# app = FastAPI()
 security = HTTPBearer()
 router = APIRouter()
 
@@ -27,49 +25,42 @@ async def hello(request: Request):
 @router.get("/api/v1/refresh-access-token")
 @limiter.limit("10/minute")
 async def refresh_access_token(request: Request, headers=Depends(security)):
-    try:
-        payload = await decode_jwt_token(headers.credentials)
+    payload = await decode_jwt_token(headers.credentials)
 
-        if payload.get("type") != "refresh":
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid token type"
-            )
-        user_id = payload.get("user_id") if isinstance(payload, dict) else None
-        user_id = user_id['user_id'] if isinstance(user_id, dict) else None
-        
-        token = await create_jwt_token({"user_id": user_id})
-        return {"access_token": token}
-    
-    except Exception as e:
-        return {"error": str(e)}
-    
-@router.post("/api/v1/users/signup")
+    if payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Invalid token type")
+
+    token = await create_jwt_token(payload.get("user_id"))
+    return {"access_token": token}
+
+@router.post("/api/v1/users/signup", response_model=UserOut)
 @limiter.limit("5/minute")
-async def signup(request: Request, username: str, email: str, password: str, first_name: str, last_name: str=None,
-                db: Session = Depends(get_db)):
-
-    user = Users(first_name=first_name, email=email, last_name=last_name, password_hash=password, username=username)
+async def signup(request: Request, body: SignupRequest, db: Session = Depends(get_db)):
+    user = Users(
+        first_name=body.first_name,
+        last_name=body.last_name,
+        email=body.email,
+        username=body.username,
+        password_hash=hash_password(body.password),
+    )
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Username or email already exists")
     db.refresh(user)
 
     return user
-    
+
 @router.post("/api/v1/users/login")
 @limiter.limit("5/minute")
-async def login(request: Request, username: str, password: str, db: Session = Depends(get_db)):
-    user = db.query(Users).filter(Users.username == username).first()
-    print("userd", user.id)
-    if not user or user.password_hash != password:
-        return {"error": "Invalid username or password"}
-    print(user.id)
-    access_token = await create_jwt_token(
-        {"user_id": user.id}
-    )
-    print("token", access_token)
-    refresh_access_token = await create_refresh_token(
-        {"user_id": user.id}
-    )
+async def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(Users).filter(Users.username == body.username).first()
+    if not user or not verify_password(body.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
 
-    return {"message": "Login successful", "token": access_token, "refresh_token": refresh_access_token}
+    access_token = await create_jwt_token(user.id)
+    refresh_token = await create_refresh_token(user.id)
+
+    return {"message": "Login successful", "token": access_token, "refresh_token": refresh_token}
